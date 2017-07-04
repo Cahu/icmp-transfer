@@ -1,0 +1,7 @@
+[package]
+name = "icmp_communicator"
+version = "0.1.0"
+authors = ["Cahu"]
+
+[dependencies]
+nix="0.8.1"
