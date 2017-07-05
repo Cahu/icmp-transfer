@@ -2,7 +2,7 @@ extern crate icmp_communicator;
 use icmp_communicator::IcmpCommunicator;
 
 fn main() {
-    let com = IcmpCommunicator::new().expect("Make sure you have the necessary permissions");
+    let com = IcmpCommunicator::new(2).expect("Make sure you have the necessary permissions");
 
     let mut buf = [0; 4096];
     loop {

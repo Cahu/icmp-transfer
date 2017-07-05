@@ -11,7 +11,8 @@ pub use self::nix::sys::socket::*;
 // * \x42: a byte we choose not totally at random to separate our packets from the rest of the
 // ICMP trafic
 // * \x00\x00: place holder for the checksum
-const PKT_HEADER: &[u8; 4] = b"\x08\x42\x00\x00";
+// * \x00: place holder for the communicator's id
+const PKT_HEADER: &[u8; 5] = b"\x08\x42\x00\x00\x00";
 
 // IP packet header is 20 bytes long
 const IP_SIZE: usize = 20;
@@ -28,15 +29,16 @@ type Result<T> = result::Result<T, ICError>;
 
 
 pub struct IcmpCommunicator {
+    id:   u8,
     sock: RawFd,
 }
 
 impl IcmpCommunicator {
 
-    pub fn new() -> Result<IcmpCommunicator> {
+    pub fn new(id: u8) -> Result<IcmpCommunicator> {
         socket(AddressFamily::Inet, SockType::Raw, SockFlag::empty(), 0x01 /* IPPROTO_ICMP */)
             .map_err(|e| ICError::Nix(e))
-            .map    (|s| IcmpCommunicator { sock: s })
+            .map    (|s| IcmpCommunicator { id: id, sock: s })
     }
 
     pub fn rawfd(&self) -> RawFd {
@@ -48,6 +50,9 @@ impl IcmpCommunicator {
 
         // first add the header
         let mut data = PKT_HEADER.to_vec();
+
+        // add this comminucator's id
+        data[4] = self.id;
 
         // add user data
         data.extend_from_slice(buf);
@@ -97,6 +102,11 @@ impl IcmpCommunicator {
         }
         if icmp_data[1] != 0x42 {
             // our signature is not there => this is probably some other icmp trafic
+            return Ok(None);
+        }
+        // bytes at idx 2 and 3 are the checksum, skip them
+        if icmp_data[4] == self.id {
+            // this packet was emmited using our id, ignore it
             return Ok(None);
         }
 

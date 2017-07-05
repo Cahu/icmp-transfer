@@ -5,7 +5,7 @@ extern crate icmp_communicator;
 use icmp_communicator::IcmpCommunicator;
 
 fn main() {
-    let com = IcmpCommunicator::new().expect("Make sure you have the necessary permissions");
+    let com = IcmpCommunicator::new(1).expect("Make sure you have the necessary permissions");
 
     let addr = "127.0.0.1:0".parse().unwrap();
     let peer = icmp_communicator::InetAddr::from_std(&addr);
