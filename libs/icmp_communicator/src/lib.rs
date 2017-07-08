@@ -3,6 +3,7 @@ use std::result;
 use std::os::unix::io::RawFd;
 
 extern crate nix;
+pub use self::nix::unistd;
 pub use self::nix::sys::socket::*;
 
 
@@ -43,6 +44,10 @@ impl IcmpCommunicator {
 
     pub fn rawfd(&self) -> RawFd {
         self.sock
+    }
+
+    pub fn close(&self) -> Result<()> {
+        unistd::close(self.sock).map_err(|e| ICError::Nix(e))
     }
 
     /// Send the data contained in `buf` to `peer` inside an ICMP packet.
