@@ -1,6 +1,6 @@
 use std::cmp;
 use std::result;
-use std::os::unix::io::RawFd;
+pub use std::os::unix::io::RawFd;
 
 extern crate nix;
 pub use self::nix::unistd;
