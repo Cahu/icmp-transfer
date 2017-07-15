@@ -38,7 +38,7 @@ impl IcmpCommunicator {
 
     pub fn new(id: u8) -> Result<IcmpCommunicator> {
         socket(AddressFamily::Inet, SockType::Raw, SockFlag::empty(), 0x01 /* IPPROTO_ICMP */)
-            .map_err(|e| ICError::Nix(e))
+            .map_err(ICError::Nix)
             .map    (|s| IcmpCommunicator { id: id, sock: s })
     }
 
@@ -47,7 +47,7 @@ impl IcmpCommunicator {
     }
 
     pub fn close(&self) -> Result<()> {
-        unistd::close(self.sock).map_err(|e| ICError::Nix(e))
+        unistd::close(self.sock).map_err(ICError::Nix)
     }
 
     /// Send the data contained in `buf` to `peer` inside an ICMP packet.
@@ -80,7 +80,7 @@ impl IcmpCommunicator {
         // Finally, send
         let addr = SockAddr::Inet(peer);
         sendto(self.sock, &data, &addr, MsgFlags::empty())
-            .map_err(|e| ICError::Nix(e))
+            .map_err(ICError::Nix)
             .map    (|s| if s > PKT_HEADER.len() { s - PKT_HEADER.len() } else { 0 })
     }
 
@@ -91,7 +91,7 @@ impl IcmpCommunicator {
     pub fn recvfrom(&self, buf: &mut [u8]) -> Result<Option<(usize, InetAddr)>> {
         let mut data = [0; 4096];
 
-        let (sz, addr) = recvfrom(self.sock, &mut data).map_err(|e| ICError::Nix(e))?;
+        let (sz, addr) = recvfrom(self.sock, &mut data).map_err(ICError::Nix)?;
 
         if sz < IP_SIZE+PKT_HEADER.len() {
             return Ok(None);
