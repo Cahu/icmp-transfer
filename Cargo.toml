@@ -1,5 +1,5 @@
 [package]
-name = "icmp-tunnel"
+name = "icmp_tunnel"
 version = "0.1.0"
 authors = ["cahu"]
 
@@ -12,4 +12,9 @@ name = "client"
 path = "bin/client-main.rs"
 
 [dependencies]
+log = "0.3.8"
+env_logger = "0.4.3"
+nix = "0.8.1"
+mio = "0.6.9"
+byteorder = "1.0.0"
 icmp_communicator = { path = "libs/icmp_communicator" }

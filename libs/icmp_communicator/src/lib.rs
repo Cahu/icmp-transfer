@@ -1,3 +1,4 @@
+use std::io;
 use std::cmp;
 use std::result;
 pub use std::os::unix::io::RawFd;
@@ -6,14 +7,16 @@ extern crate nix;
 pub use self::nix::unistd;
 pub use self::nix::sys::socket::*;
 
+extern crate mio;
+use self::mio::*;
+use mio::unix::EventedFd;
 
 // The header to include in all packets. It is 4 bytes long:
-// * \x08: ICMP echo request
-// * \x42: a byte we choose not totally at random to separate our packets from the rest of the
+// * \x00: ICMP echo reply
+// * \x00: a byte we choose not totally at random to separate our packets from the rest of the
 // ICMP trafic
 // * \x00\x00: place holder for the checksum
-// * \x00: place holder for the communicator's id
-const PKT_HEADER: &[u8; 5] = b"\x08\x42\x00\x00\x00";
+const PKT_HEADER: &[u8; 4] = b"\x00\x00\x00\x00";
 
 // IP packet header is 20 bytes long
 const IP_SIZE: usize = 20;
@@ -37,17 +40,20 @@ pub struct IcmpCommunicator {
 impl IcmpCommunicator {
 
     pub fn new(id: u8) -> Result<IcmpCommunicator> {
+        assert!(id != 0, "id must be non zero");
         socket(AddressFamily::Inet, SockType::Raw, SockFlag::empty(), 0x01 /* IPPROTO_ICMP */)
             .map_err(ICError::Nix)
             .map    (|s| IcmpCommunicator { id: id, sock: s })
     }
 
-    pub fn rawfd(&self) -> RawFd {
-        self.sock
+    pub fn rawfd(&self) -> &RawFd {
+        &self.sock
     }
 
-    pub fn close(&self) -> Result<()> {
-        unistd::close(self.sock).map_err(ICError::Nix)
+    pub fn close(&mut self) -> Result<()> {
+        let res = unistd::close(self.sock);
+        self.sock = -1;
+        res.map_err(ICError::Nix)
     }
 
     /// Send the data contained in `buf` to `peer` inside an ICMP packet.
@@ -57,7 +63,7 @@ impl IcmpCommunicator {
         let mut data = PKT_HEADER.to_vec();
 
         // add this comminucator's id
-        data[4] = self.id;
+        data[1] = self.id;
 
         // add user data
         data.extend_from_slice(buf);
@@ -101,19 +107,19 @@ impl IcmpCommunicator {
         let icmp_data = &data[IP_SIZE..];
         let user_data = &icmp_data[PKT_HEADER.len()..];
 
-        if icmp_data[0] != 0x08 {
+        if icmp_data[0] != 0x00 {
             // not an ICMP echo request
             return Ok(None);
         }
-        if icmp_data[1] != 0x42 {
+        if icmp_data[1] == 0x00 {
             // our signature is not there => this is probably some other icmp trafic
             return Ok(None);
         }
-        // bytes at idx 2 and 3 are the checksum, skip them
-        if icmp_data[4] == self.id {
+        if icmp_data[1] == self.id {
             // this packet was emmited using our id, ignore it
             return Ok(None);
         }
+        // bytes at idx 2 and 3 are the checksum, skip them
 
         match addr {
             SockAddr::Inet(peer) => {
@@ -125,6 +131,31 @@ impl IcmpCommunicator {
         }
     }
 }
+
+
+impl Drop for IcmpCommunicator {
+    fn drop(&mut self) {
+        self.close().ok();
+    }
+}
+
+
+impl Evented for IcmpCommunicator {
+    fn register(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt)
+      -> io::Result<()> {
+        EventedFd(&self.sock).register(poll, token, interest, opts)
+    }
+
+    fn reregister(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt)
+      -> io::Result<()> {
+        EventedFd(&self.sock).reregister(poll, token, interest, opts)
+    }
+
+    fn deregister(&self, poll: &Poll) -> io::Result<()> {
+        EventedFd(&self.sock).deregister(poll)
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
